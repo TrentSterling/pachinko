@@ -1,0 +1,642 @@
+
+<!DOCTYPE html>
+<html lang="en" class="notranslate" translate="no">
+<head>
+    <!-- ================================================================= -->
+    <!-- SECTION: METADATA & FONT IMPORTS                                  -->
+    <!-- ================================================================= -->
+    <meta charset="UTF-8">
+    <meta name="google" content="notranslate" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizza Pachinko - The Definitive Tront Edition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
+    
+    <!-- ================================================================= -->
+    <!-- SECTION: CSS STYLING                                              -->
+    <!-- ================================================================= -->
+    <style>
+        /* CHUNK: Root Variables & Global Resets */
+        :root {
+            --crust-color: #f3b63d;
+            --crust-dark: #8c5a27;
+            --cheese-glow: #FFD700;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* CHUNK: Core Body & Layout Structure */
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background-color: #2d2d2d;
+            font-family: 'Lilita One', cursive;
+        }
+
+        main {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+            background-color: #4a4a4a;
+            background-image: radial-gradient(#5a5a5a 1px, transparent 1px);
+            background-size: 15px 15px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 20px;
+            background-color: var(--crust-dark);
+            color: var(--crust-color);
+            text-shadow: 2px 2px 0px #000;
+            flex-shrink: 0;
+            border-bottom: 4px solid #000;
+        }
+        
+        footer {
+            padding: 5px;
+            text-align: center;
+            background: #222;
+            color: #888;
+            font-size: 0.8em;
+            flex-shrink: 0;
+        }
+
+        /* CHUNK: UI Elements (Header, Score, Mute) */
+        h1 {
+            font-size: clamp(1.8em, 3vw, 2.2em);
+        }
+
+        #score-display {
+            font-size: clamp(1.1em, 2vw, 1.5em);
+            color: white;
+            transition: transform 0.1s, color 0.1s;
+        }
+
+        #score-display.pulse {
+            transform: scale(1.2);
+            color: var(--cheese-glow);
+        }
+
+        #mute-btn {
+            background: none;
+            border: none;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #mute-btn:hover {
+            transform: scale(1.2);
+        }
+        
+        /* CHUNK: Game Canvas & Aspect-Ratio Viewbox (CRITICAL) */
+        .game-container {
+            position: relative;
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            min-height: 0;
+            padding: 15px;
+        }
+        
+        #gameCanvas-wrapper {
+            position: relative;
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 800 / 600;
+            border: 12px solid #a55d35;
+            border-bottom-width: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5), inset 0 0 15px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        /* CHUNK: Hardware-Accelerated Sheen Animation */
+        /* **** SHINE EFFECT CHANGE IS HERE **** */
+        #gameCanvas-wrapper::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                to right,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.15) 50%,
+                rgba(255, 255, 255, 0) 100%
+            );
+            transform: rotate(25deg);
+            animation: sheen 4s infinite linear;
+            pointer-events: none;
+        }
+
+        @keyframes sheen {
+            0% { transform: translateX(-75%) rotate(25deg); }
+            100% { transform: translateX(75%) rotate(25deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- ================================================================= -->
+    <!-- SECTION: HTML DOCUMENT STRUCTURE                                  -->
+    <!-- ================================================================= -->
+    <main>
+        <header>
+            <div id="score-display">Score: 0</div>
+            <h1>Pizza Pachinko</h1>
+            <canvas id="mute-btn"></canvas>
+        </header>
+
+        <div class="game-container">
+            <div id="gameCanvas-wrapper">
+                <canvas id="gameCanvas"></canvas>
+            </div>
+        </div>
+
+        <footer> Vibecoded by Tront (Trent Sterling) & Gemini </footer>
+    </main>
+
+    <!-- ================================================================= -->
+    <!-- SECTION: JAVASCRIPT GAME LOGIC                                    -->
+    <!-- ================================================================= -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // -----------------------------------------------------------------
+            // CHUNK: Canvas & DOM Element Initialization
+            // -----------------------------------------------------------------
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const scoreDisplay = document.getElementById('score-display');
+            const muteBtnCanvas = document.getElementById('mute-btn');
+            const muteCtx = muteBtnCanvas.getContext('2d');
+
+            // -----------------------------------------------------------------
+            // CHUNK: Game Configuration & Global State
+            // -----------------------------------------------------------------
+            const GAME_WIDTH = 800;
+            const GAME_HEIGHT = 600;
+            canvas.width = GAME_WIDTH;
+            canvas.height = GAME_HEIGHT;
+            muteBtnCanvas.width = 40;
+            muteBtnCanvas.height = 40;
+
+            let totalScore = 0, currentScore = 0, ball = null;
+            let pegs = [], particles = [], prizeDividers = [];
+            let gameMessage = "Drop a ball to start!", messageIsWin = false, messageTimer = 0;
+            
+            const GRAVITY = 0.2, BOUNCE_FACTOR = 0.85;
+
+            // -----------------------------------------------------------------
+            // CHUNK: Audio System (Procedural Web Audio API)
+            // -----------------------------------------------------------------
+            let audioCtx, audioInitialized = false, isMuted = false;
+
+            function drawMuteButton() {
+                muteCtx.clearRect(0, 0, 40, 40);
+                muteCtx.fillStyle = 'white';
+                muteCtx.font = '28px sans-serif';
+                muteCtx.textAlign = 'center';
+                muteCtx.textBaseline = 'middle';
+                muteCtx.fillText('🔊', 20, 22);
+                if (isMuted) {
+                    muteCtx.strokeStyle = '#D62828';
+                    muteCtx.lineWidth = 3;
+                    muteCtx.beginPath();
+                    muteCtx.moveTo(8, 8);
+                    muteCtx.lineTo(32, 32);
+                    muteCtx.stroke();
+                    muteCtx.beginPath();
+                    muteCtx.arc(20,20,17,0,Math.PI*2);
+                    muteCtx.stroke();
+                }
+            }
+
+            function initAudio() {
+                if (!audioInitialized) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    audioInitialized = true;
+                }
+            }
+
+            function playSound(type, value = 0) {
+                if (!audioInitialized || isMuted) return;
+                const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                if (type === 'drop') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.3);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                } else if (type === 'bounce') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(350 + Math.random() * 100, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                } else if (type === 'win') {
+                    const baseFreq = 440 + (value/1000)*440;
+                    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(baseFreq * 0.8, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, audioCtx.currentTime + 0.1);
+                    osc.frequency.exponentialRampToValueAtTime(baseFreq, audioCtx.currentTime + 0.2);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                }
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            }
+
+            // -----------------------------------------------------------------
+            // CHUNK: "Juice" - Screen Shake System
+            // -----------------------------------------------------------------
+            let screenShake = { duration: 0, magnitude: 0, active: false };
+            function triggerScreenShake(d, m) {
+                screenShake = { duration: d, magnitude: m, active: true };
+            }
+
+            // -----------------------------------------------------------------
+            // CHUNK: Core Game Classes (Ball, Peg, Particle)
+            // -----------------------------------------------------------------
+            class Ball {
+                constructor(x, y) {
+                    this.radius = 15; this.x = x; this.y = y;
+                    this.vx = (Math.random() - 0.5) * 0.2; this.vy = 0;
+                    this.squash = 1;
+                }
+                update() {
+                    this.vy += GRAVITY; this.x += this.vx; this.y += this.vy;
+                    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                    const targetSquash = 1 + speed * 0.15;
+                    this.squash += (targetSquash - this.squash) * 0.1;
+
+                    if (this.x - this.radius < 0 || this.x + this.radius > GAME_WIDTH) {
+                        this.vx *= -1;
+                        this.x = Math.max(this.radius, Math.min(GAME_WIDTH - this.radius, this.x));
+                    }
+                }
+                draw() {
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    const angle = Math.atan2(this.vy, this.vx);
+                    ctx.rotate(angle + Math.PI / 2);
+                    ctx.scale(1 / this.squash, this.squash);
+
+                    const gradient = ctx.createRadialGradient(-this.radius*0.3,-this.radius*0.3,1,0,0,this.radius*1.5);
+                    gradient.addColorStop(0,'#ffffff');
+                    gradient.addColorStop(0.7,'#f0f0f0');
+                    gradient.addColorStop(1,'#a0a0a0');
+                    
+                    ctx.beginPath();
+                    ctx.arc(0,0,this.radius,0,Math.PI*2);
+                    ctx.fillStyle = gradient;
+                    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                    ctx.shadowBlur = 10;
+                    ctx.fill();
+                    ctx.restore();
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            class Peg {
+                constructor(x, y, radius, type) {
+                    this.x = x; this.y = y; this.radius = radius; this.type = type;
+                    this.popScale = 1; this.wobbleAmount = 0; this.wobbleSpeed = 0.2;
+                    this.wobblePhase = Math.random() * Math.PI * 2;
+                    this.idleWiggleAngle = Math.random() * Math.PI * 2;
+                    // **** IDLE WIGGLE JUICE-UP ****
+                    this.idleWiggleSpeed = 0.05 + Math.random() * 0.03; // Faster wiggle
+                }
+                triggerHit() {
+                    this.popScale = 1.6; this.wobbleAmount = 1; this.wobbleSpeed = 0.5;
+                }
+                update() {
+                    if (this.popScale > 1) this.popScale -= 0.08; else this.popScale = 1;
+                    if (this.wobbleAmount > 0) {
+                        this.wobbleAmount -= 0.05; this.wobblePhase += this.wobbleSpeed;
+                    } else {
+                        this.wobbleAmount = 0; this.wobbleSpeed = 0.2;
+                    }
+                    this.idleWiggleAngle += this.idleWiggleSpeed;
+                }
+                draw() {
+                    const hitWobble = Math.sin(this.wobblePhase) * this.wobbleAmount * 0.4;
+                    // **** IDLE WIGGLE JUICE-UP ****
+                    const idleWobble = Math.sin(this.idleWiggleAngle) * 0.1; // More pronounced wiggle
+                    const totalRotation = hitWobble + idleWobble;
+                    
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(totalRotation);
+                    ctx.scale(this.popScale, this.popScale);
+                    switch(this.type) {
+                        case 'pepperoni':
+                            ctx.fillStyle = '#D62828'; ctx.beginPath(); ctx.arc(0,0, this.radius, 0, Math.PI * 2); ctx.fill();
+                            ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.arc(-this.radius*0.3, -this.radius*0.3, this.radius*0.1, 0, Math.PI*2); ctx.fill();
+                            ctx.beginPath(); ctx.arc(this.radius*0.4, this.radius*0.1, this.radius*0.15, 0, Math.PI*2); ctx.fill();
+                            break;
+                        case 'olive':
+                            ctx.fillStyle = '#264653'; ctx.beginPath(); ctx.arc(0,0, this.radius, 0, Math.PI * 2); ctx.fill();
+                            ctx.fillStyle = '#f3d673'; ctx.beginPath(); ctx.arc(0,0, this.radius * 0.4, 0, Math.PI * 2); ctx.fill();
+                            break;
+                        case 'mushroom':
+                            ctx.fillStyle = '#d3c5aa'; ctx.beginPath(); ctx.rect(-this.radius*0.4, 0, this.radius*0.8, this.radius*0.8); ctx.fill();
+                            ctx.fillStyle = '#a18d6c'; ctx.beginPath(); ctx.moveTo(-this.radius, 0); ctx.quadraticCurveTo(0, -this.radius*1.5, this.radius, 0); ctx.closePath(); ctx.fill();
+                            break;
+                        case 'onion':
+                            ctx.strokeStyle = '#f5f5f5'; ctx.lineWidth = this.radius * 0.35; ctx.beginPath(); ctx.arc(0,0, this.radius - ctx.lineWidth / 2, 0, Math.PI * 2); ctx.stroke();
+                            break;
+                    }
+                    ctx.restore();
+                }
+            }
+
+            class Particle {
+                constructor(x, y, type = 'cheese') {
+                    this.x = x; this.y = y; this.type = type;
+                    if (type === 'cheese') {
+                        this.vx = (Math.random() - 0.5) * 5; this.vy = (Math.random() - 0.7) * 6; this.lifespan = 1;
+                        this.radius = Math.random() * 4 + 2;
+                        const colors = ['#FFD700', '#FFA500', '#FFFFFF'];
+                        this.color = colors[Math.floor(Math.random() * colors.length)];
+                    } else { // Star particle for wins
+                        this.vx = (Math.random() - 0.5) * 8; this.vy = (Math.random() - 0.5) * 8; this.lifespan = 1;
+                        this.radius = Math.random() * 5 + 3; this.angle = 0;
+                    }
+                }
+                update() {
+                    this.x += this.vx; this.y += this.vy;
+                    if (this.type === 'cheese') this.vy += 0.1;
+                    this.lifespan -= 0.02;
+                }
+                draw() {
+                    ctx.globalAlpha = this.lifespan > 0 ? this.lifespan : 0;
+                    if (this.type === 'cheese') {
+                        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color;
+                        ctx.shadowColor = this.color; ctx.shadowBlur = 15; ctx.fill();
+                    } else {
+                        ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle += 0.1);
+                        const spikes = 5, outerR = this.radius, innerR = this.radius / 2;
+                        let rot = Math.PI/2 * 3, step = Math.PI / spikes;
+                        ctx.beginPath(); ctx.moveTo(0, -outerR);
+                        for(let i = 0; i < spikes; i++) {
+                            ctx.lineTo(Math.cos(rot)*outerR, Math.sin(rot)*outerR); rot+=step;
+                            ctx.lineTo(Math.cos(rot)*innerR, Math.sin(rot)*innerR); rot+=step;
+                        }
+                        ctx.closePath(); ctx.fillStyle = '#FFD700'; ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 20; ctx.fill(); ctx.restore();
+                    }
+                    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+                }
+            };
+            
+            // -----------------------------------------------------------------
+            // CHUNK: BOARD GENERATION ("FUNNEL OF CHAOS" + "CHAOS TRIANGLE")
+            // -----------------------------------------------------------------
+            function createBoard() {
+                pegs = [];
+                const PEG_COUNT_CENTER = 12; // Reduced for the new blockers
+                const MIN_RADIUS = 16, MAX_RADIUS = 20;
+                const toppingTypes = ['pepperoni', 'olive', 'mushroom', 'onion'];
+                const BALL_DIAMETER = 15 * 2;
+                const MIN_SPACING = BALL_DIAMETER + 25;
+
+                const canPlace = (peg) => {
+                    for (const existingPeg of pegs) {
+                        const dx = peg.x - existingPeg.x, dy = peg.y - existingPeg.y;
+                        if (Math.sqrt(dx*dx + dy*dy) < peg.radius + existingPeg.radius + MIN_SPACING) return false;
+                    }
+                    return true;
+                };
+
+                // PHASE 1: THE SIDE "FUNNEL" - Prevents side wall exploits.
+                const funnelPegs = [
+                    { x: 40,  y: 140, r: 18, type: toppingTypes[0] }, { x: 80,  y: 220, r: 18, type: toppingTypes[1] },
+                    { x: 120, y: 300, r: 18, type: toppingTypes[2] }, { x: 160, y: 380, r: 18, type: toppingTypes[3] },
+                    { x: GAME_WIDTH - 40,  y: 140, r: 18, type: toppingTypes[0] }, { x: GAME_WIDTH - 80,  y: 220, r: 18, type: toppingTypes[1] },
+                    { x: GAME_WIDTH - 120, y: 300, r: 18, type: toppingTypes[2] }, { x: GAME_WIDTH - 160, y: 380, r: 18, type: toppingTypes[3] }
+                ];
+                funnelPegs.forEach(p => pegs.push(new Peg(p.x, p.y, p.r, p.type)));
+
+                // PHASE 2: THE "CHAOS TRIANGLE" - A guaranteed structure to block central drops.
+                const chaosTriangle = [
+                    { x: GAME_WIDTH / 2, y: 180, r: 22, type: toppingTypes[0] },
+                    { x: GAME_WIDTH / 2 - 60, y: 260, r: 22, type: toppingTypes[1] },
+                    { x: GAME_WIDTH / 2 + 60, y: 260, r: 22, type: toppingTypes[2] }
+                ];
+                chaosTriangle.forEach(p => pegs.push(new Peg(p.x, p.y, p.r, p.type)));
+                
+                // PHASE 3: FILL THE CORE - Randomly populate the remaining space.
+                const BORDER_MARGIN = 180;
+                const bounds = { top: 120, bottom: GAME_HEIGHT - 150, left: BORDER_MARGIN, right: GAME_WIDTH - BORDER_MARGIN };
+                for (let i = 0; i < PEG_COUNT_CENTER; i++) {
+                    let attempts = 0;
+                    while (attempts < 100) {
+                        const radius = Math.random() * (MAX_RADIUS - MIN_RADIUS) + MIN_RADIUS;
+                        const x = Math.random() * (bounds.right - bounds.left - radius*2) + bounds.left + radius;
+                        const y = Math.random() * (bounds.bottom - bounds.top - radius*2) + bounds.top + radius;
+                        const type = toppingTypes[Math.floor(Math.random() * toppingTypes.length)];
+                        const newPeg = new Peg(x, y, radius, type);
+                        if (canPlace(newPeg)) { pegs.push(newPeg); break; }
+                        attempts++;
+                    }
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // CHUNK: Core Game Logic (Collisions, Scoring)
+            // -----------------------------------------------------------------
+            const prizeValues = [100, 200, 500, 1000, 500, 200, 100];
+
+            function checkCollisions() {
+                if (!ball) return;
+                for (const peg of pegs) {
+                    const dx = ball.x - peg.x, dy = ball.y - peg.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < ball.radius + peg.radius) {
+                        playSound('bounce'); peg.triggerHit(); triggerScreenShake(5, 2);
+                        for (let i = 0; i < 15; i++) particles.push(new Particle(ball.x, ball.y, 'cheese'));
+                        const angle = Math.atan2(dy, dx), speed = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
+                        ball.vx = Math.cos(angle) * speed * BOUNCE_FACTOR + (Math.random() - 0.5) * 0.1;
+                        ball.vy = Math.sin(angle) * speed * BOUNCE_FACTOR;
+                        const overlap = (ball.radius + peg.radius) - dist;
+                        ball.x += Math.cos(angle) * overlap;
+                        ball.y += Math.sin(angle) * overlap;
+                        return;
+                    }
+                }
+                const prizeZoneHeight = 70;
+                if (ball.y + ball.radius > GAME_HEIGHT - prizeZoneHeight) {
+                    const binWidth = GAME_WIDTH / prizeValues.length;
+                    const binIndex = Math.floor(ball.x / binWidth);
+                    if(prizeValues[binIndex] !== undefined) {
+                        if (prizeDividers[binIndex]) prizeDividers[binIndex].triggerJiggle();
+                        if (prizeDividers[binIndex - 1]) prizeDividers[binIndex - 1].triggerJiggle();
+                        handleWin(prizeValues[binIndex]);
+                        ball = null; return;
+                    }
+                }
+                if (ball.y - ball.radius > GAME_HEIGHT) { handleWin(0); ball = null; }
+            }
+
+            function handleWin(points) {
+                if(points > 0) { playSound('win', points); triggerScreenShake(15, 5); }
+                totalScore += points;
+                messageIsWin = true;
+                messageTimer = 2.5 * 60;
+                gameMessage = points > 0 ? `YOU WON ${points}!` : "TRY AGAIN!";
+                if (points > 0) {
+                    for(let i=0; i < points/10; i++) particles.push(new Particle(GAME_WIDTH*Math.random(), GAME_HEIGHT - 20, 'star'));
+                }
+            }
+            
+            function updateScore() {
+                if (currentScore < totalScore) {
+                    currentScore += Math.ceil((totalScore - currentScore) / 10);
+                    if (currentScore > totalScore) currentScore = totalScore;
+                    scoreDisplay.classList.add('pulse');
+                } else {
+                    scoreDisplay.classList.remove('pulse');
+                }
+                scoreDisplay.textContent = `Score: ${currentScore}`;
+            }
+            
+            for (let i = 1; i < prizeValues.length; i++) {
+                prizeDividers.push({ x: i * (GAME_WIDTH / prizeValues.length), jiggle: 0, jigglePhase: 0, triggerJiggle: function() { this.jiggle = 1; } });
+            }
+            
+            // -----------------------------------------------------------------
+            // CHUNK: Drawing & Rendering
+            // -----------------------------------------------------------------
+            function drawScene() {
+                const bgGrad = ctx.createRadialGradient(GAME_WIDTH/2,GAME_HEIGHT,5,GAME_WIDTH/2,GAME_HEIGHT,GAME_WIDTH);
+                bgGrad.addColorStop(0, '#f9e79f');
+                bgGrad.addColorStop(1, '#f3d673');
+                ctx.fillStyle = bgGrad;
+                ctx.fillRect(0,0,GAME_WIDTH, GAME_HEIGHT);
+
+                const binWidth = GAME_WIDTH / prizeValues.length;
+                const prizeColors = ['#4CAF50', '#2196F3', '#f44336', '#9C27B0', '#f44336', '#2196F3', '#4CAF50'];
+                for (let i = 0; i < prizeValues.length; i++) {
+                    ctx.fillStyle = prizeColors[i];
+                    ctx.fillRect(i * binWidth, GAME_HEIGHT - 40, binWidth, 40);
+                    ctx.fillStyle = 'white';
+                    ctx.font = `bold ${prizeValues[i] >= 1000 ? '18px' : '20px'} "Lilita One"`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(prizeValues[i], i * binWidth + binWidth/2, GAME_HEIGHT - 15);
+                }
+
+                const crustHeight = 70;
+                prizeDividers.forEach(d => {
+                    d.jiggle *= 0.9; d.jigglePhase += 0.8;
+                    const wobble = Math.sin(d.jigglePhase) * d.jiggle * 15;
+                    ctx.beginPath();
+                    ctx.moveTo(d.x + wobble, GAME_HEIGHT - 40);
+                    ctx.lineTo(d.x - 10, GAME_HEIGHT - 40 - crustHeight);
+                    ctx.lineTo(d.x + 10, GAME_HEIGHT - 40 - crustHeight);
+                    ctx.closePath();
+                    const crustGrad = ctx.createLinearGradient(d.x-10,0,d.x+10,0);
+                    crustGrad.addColorStop(0,'#a07d30');
+                    crustGrad.addColorStop(0.5,'#E9C46A');
+                    crustGrad.addColorStop(1,'#a07d30');
+                    ctx.fillStyle = crustGrad;
+                    ctx.fill();
+                });
+            }
+            
+            // -----------------------------------------------------------------
+            // CHUNK: Main Game Loop
+            // -----------------------------------------------------------------
+            function gameLoop() {
+                ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                
+                if (screenShake.active) {
+                    ctx.save();
+                    const dx=(Math.random()-0.5)*screenShake.magnitude, dy=(Math.random()-0.5)*screenShake.magnitude;
+                    ctx.translate(dx, dy);
+                    screenShake.duration--;
+                    if (screenShake.duration <= 0) screenShake.active = false;
+                }
+
+                drawScene();
+                particles = particles.filter(p => p.lifespan > 0);
+                particles.forEach(p => { p.update(); p.draw(); });
+                pegs.forEach(peg => { peg.update(); peg.draw(); });
+                if (ball) { ball.update(); ball.draw(); checkCollisions(); }
+                updateScore();
+                
+                if (messageTimer > 0) messageTimer--;
+                else if (ball === null) { gameMessage = "Click to drop!"; messageIsWin = false; }
+                
+                ctx.textAlign = 'center';
+                if (messageIsWin) {
+                    ctx.font = 'bold 40px "Lilita One"';
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 6;
+                    ctx.strokeText(gameMessage, GAME_WIDTH / 2, 60);
+                    ctx.fillStyle = '#D62828';
+                    ctx.fillText(gameMessage, GAME_WIDTH / 2, 60);
+                } else {
+                    ctx.font = 'bold 28px "Lilita One"';
+                    ctx.shadowColor = 'black';
+                    ctx.shadowBlur = 8;
+                    ctx.fillStyle = 'white';
+                    ctx.fillText(gameMessage, GAME_WIDTH / 2, 50);
+                    ctx.shadowBlur = 0;
+                }
+                
+                if (screenShake.active) {
+                    ctx.restore();
+                }
+                requestAnimationFrame(gameLoop);
+            }
+            
+            // -----------------------------------------------------------------
+            // CHUNK: Event Listeners
+            // -----------------------------------------------------------------
+            muteBtnCanvas.addEventListener('click', () => {
+                isMuted = !isMuted;
+                drawMuteButton();
+            });
+
+            canvas.addEventListener('click', (e) => {
+                initAudio();
+                if (!ball) {
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = GAME_WIDTH / rect.width;
+                    const x = (e.clientX - rect.left) * scaleX;
+                    ball = new Ball(x, -20);
+                    gameMessage = "Bouncin'!";
+                    messageIsWin = false;
+                    playSound('drop');
+                }
+            });
+
+            // -----------------------------------------------------------------
+            // CHUNK: Game Initialization
+            // -----------------------------------------------------------------
+            createBoard();
+            drawMuteButton();
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
