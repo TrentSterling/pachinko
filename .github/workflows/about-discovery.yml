@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: '24'
       - run: node --test tests/about-discovery/contract.cjs
+      - name: Pachinko cadence and canvas regression checks
+        run: node --test tests/gameplay/timing.cjs
       - name: Build Voxel Heroes when applicable
         if: github.event.repository.name == 'voxelheroes'
         run: npm ci && npm run build
@@ -28,10 +30,19 @@ jobs:
         env:
           REPO_NAME: ${{ github.event.repository.name }}
         run: node tests/about-discovery/browser.cjs
+      - name: Pachinko scene-method browser regressions
+        run: node tests/gameplay/browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: about-discovery-evidence
           path: .about-evidence/
+          include-hidden-files: true
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pachinko-gameplay-evidence
+          path: .gameplay-evidence/
           include-hidden-files: true
           retention-days: 7
