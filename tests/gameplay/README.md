@@ -18,10 +18,13 @@ Browser instrumentation exposes the existing game closure when its normal
 DOMContentLoaded callback is registered; production functions are unchanged.
 It counts native canvas saves/restores and uses controlled callback timestamps.
 It is not native display-refresh or physical-input qualification. Tests wait
-for complete document initialization before comparing equal seeded state: the
-shared About component also consumes random draws during startup. Starting at
-the earlier game-hook readiness marker produced an inconsistent fixture and
-was corrected; source behavior and assertions were not weakened.
+for complete document initialization before comparing equal seeded state. The
+external GA4 script also consumes random draws asynchronously, so the seeded
+scene fixture blocks only its telemetry-script URL before navigation. All game,
+About and font content remains available, and all initial-state, outcome and RNG
+equality assertions remain intact. Live call-stack tracing corrected an earlier
+attribution of startup random draws to About; the consumer was GA4. The original
+About gate is unchanged and still exercises the full page separately.
 
 The timing policy is explicit: original fixed 60 Hz ticks, at most six ticks
 for a moderate frame gap, discard gaps greater than 250 ms, and reset elapsed
