@@ -395,6 +395,7 @@
                 update() {
                     this.x += this.vx; this.y += this.vy;
                     if (this.type === 'cheese') this.vy += 0.1;
+                    else this.angle += 0.1;
                     this.lifespan -= 0.02;
                 }
                 draw() {
@@ -403,7 +404,7 @@
                         ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color;
                         ctx.shadowColor = this.color; ctx.shadowBlur = 15; ctx.fill();
                     } else {
-                        ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle += 0.1);
+                        ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
                         const spikes = 5, outerR = this.radius, innerR = this.radius / 2;
                         let rot = Math.PI/2 * 3, step = Math.PI / spikes;
                         ctx.beginPath(); ctx.moveTo(0, -outerR);
@@ -555,7 +556,6 @@
 
                 const crustHeight = 70;
                 prizeDividers.forEach(d => {
-                    d.jiggle *= 0.9; d.jigglePhase += 0.8;
                     const wobble = Math.sin(d.jigglePhase) * d.jiggle * 15;
                     ctx.beginPath();
                     ctx.moveTo(d.x + wobble, GAME_HEIGHT - 40);
@@ -574,50 +574,94 @@
             // -----------------------------------------------------------------
             // CHUNK: Main Game Loop
             // -----------------------------------------------------------------
-            function gameLoop() {
-                ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-                
+            // Keep the original 60 Hz rules and random-draw order independent of display rate.
+            const STEP_MS = 1000 / 60, MAX_STEPS = 6, STALL_MS = 250;
+            let lastFrameTime = null, accumulatedMs = 0, shakeX = 0, shakeY = 0;
+
+            function resetFrameClock() {
+                lastFrameTime = null;
+                accumulatedMs = 0;
+                shakeX = shakeY = 0;
+            }
+
+            function updateGame() {
+                shakeX = shakeY = 0;
                 if (screenShake.active) {
-                    ctx.save();
-                    const dx=(Math.random()-0.5)*screenShake.magnitude, dy=(Math.random()-0.5)*screenShake.magnitude;
-                    ctx.translate(dx, dy);
+                    shakeX = (Math.random() - 0.5) * screenShake.magnitude;
+                    shakeY = (Math.random() - 0.5) * screenShake.magnitude;
                     screenShake.duration--;
                     if (screenShake.duration <= 0) screenShake.active = false;
                 }
-
-                drawScene();
+                prizeDividers.forEach(d => { d.jiggle *= 0.9; d.jigglePhase += 0.8; });
                 particles = particles.filter(p => p.lifespan > 0);
-                particles.forEach(p => { p.update(); p.draw(); });
-                pegs.forEach(peg => { peg.update(); peg.draw(); });
-                if (ball) { ball.update(); ball.draw(); checkCollisions(); }
+                particles.forEach(p => p.update());
+                pegs.forEach(peg => peg.update());
+                if (ball) { ball.update(); checkCollisions(); }
                 updateScore();
-                
                 if (messageTimer > 0) messageTimer--;
                 else if (ball === null) { gameMessage = "Click to drop!"; messageIsWin = false; }
-                
-                ctx.textAlign = 'center';
-                if (messageIsWin) {
-                    ctx.font = 'bold 40px "Lilita One"';
-                    ctx.strokeStyle = 'white';
-                    ctx.lineWidth = 6;
-                    ctx.strokeText(gameMessage, GAME_WIDTH / 2, 60);
-                    ctx.fillStyle = '#D62828';
-                    ctx.fillText(gameMessage, GAME_WIDTH / 2, 60);
-                } else {
-                    ctx.font = 'bold 28px "Lilita One"';
-                    ctx.shadowColor = 'black';
-                    ctx.shadowBlur = 8;
-                    ctx.fillStyle = 'white';
-                    ctx.fillText(gameMessage, GAME_WIDTH / 2, 50);
-                    ctx.shadowBlur = 0;
-                }
-                
-                if (screenShake.active) {
+            }
+
+            function renderGame() {
+                ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                // Scope the entire frame, even if a collision starts or finishes a shake.
+                ctx.save();
+                try {
+                    ctx.translate(shakeX, shakeY);
+                    drawScene();
+                    particles.forEach(p => p.draw());
+                    pegs.forEach(peg => peg.draw());
+                    if (ball) ball.draw();
+                    ctx.textAlign = 'center';
+                    if (messageIsWin) {
+                        ctx.font = 'bold 40px "Lilita One"';
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 6;
+                        ctx.strokeText(gameMessage, GAME_WIDTH / 2, 60);
+                        ctx.fillStyle = '#D62828';
+                        ctx.fillText(gameMessage, GAME_WIDTH / 2, 60);
+                    } else {
+                        ctx.font = 'bold 28px "Lilita One"';
+                        ctx.shadowColor = 'black';
+                        ctx.shadowBlur = 8;
+                        ctx.fillStyle = 'white';
+                        ctx.fillText(gameMessage, GAME_WIDTH / 2, 50);
+                        ctx.shadowBlur = 0;
+                    }
+                } finally {
                     ctx.restore();
                 }
+            }
+
+            function gameLoop(now) {
+                if (document.hidden) {
+                    resetFrameClock();
+                    requestAnimationFrame(gameLoop);
+                    return;
+                }
+                if (lastFrameTime !== null) {
+                    const elapsed = Math.max(0, now - lastFrameTime);
+                    if (elapsed > STALL_MS) {
+                        // Discard tab-resume/long-stall debt instead of fast-forwarding a ball.
+                        accumulatedMs = 0;
+                        shakeX = shakeY = 0;
+                    } else {
+                        accumulatedMs += Math.min(elapsed, STEP_MS * MAX_STEPS);
+                        let steps = 0;
+                        while (accumulatedMs + 1e-7 >= STEP_MS && steps < MAX_STEPS) {
+                            updateGame();
+                            accumulatedMs = Math.max(0, accumulatedMs - STEP_MS);
+                            steps++;
+                        }
+                    }
+                }
+                lastFrameTime = now;
+                renderGame();
                 requestAnimationFrame(gameLoop);
             }
-            
+
+            document.addEventListener('visibilitychange', resetFrameClock);
+
             // -----------------------------------------------------------------
             // CHUNK: Event Listeners
             // -----------------------------------------------------------------
@@ -644,7 +688,8 @@
             // -----------------------------------------------------------------
             createBoard();
             drawMuteButton();
-            gameLoop();
+            updateGame();
+            gameLoop(performance.now());
         });
     </script>
 <!-- tront-about:start -->
